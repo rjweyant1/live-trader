@@ -17,13 +17,12 @@ from datetime import datetime
 from itertools import groupby
 import btceapi
 
-# extra GMAIL accoint
-fromaddr = 'krangfromdimensionx@gmail.com'
-toaddrs  = 'robert.weyant@gmail.com'
+# LOAD EMAIL INFO FROM FILE
+email_credentials = 'email_credentials.txt' 
+(fromaddr,toaddrs,username,password)=get_email_credentials(email_credentials)
 
-username = 'krangfromdimensionx@gmail.com'
-#password = 'bqurtgboktfjkfyh'
-password = 'lcawhlwrmodhtmse'
+# SEND INITIAL EMAIL TO CHECK EVERYTHING RUNNING
+send_test_email(fromaddr,toaddrs,username,password)
 
 results_dir = 'results/grandobserver-files/'
 key_file = 'btce-api-key.txt'
@@ -346,32 +345,32 @@ class GrandObserver:
     def summary_string(self):
         
         self.update_funds()
-        RawDiff = round((float(self.price[-1]) - float(self.orders[-1])),3)
+        RawDiff = round((float(self.price[-1]) - float(self.orders[-1])),2)
         percentDiff = 100*round((float(self.price[-1]) - float(self.orders[-1])) / float(self.orders[-1]),3)     
         if percentDiff < 0: percentDirection = '-'
         elif percentDiff > 0: percentDirection = '+'
         else:    percentDirection = '+'
 
         DailyPriceData = self.price[-1440:]
-        dailyChangeDifference = round((float(self.price[-1]) - float(self.price[-1440])),3)
+        dailyChangeDifference = round((float(self.price[-1]) - float(self.price[-1440])),2)
         dailyChangePercent = 100*round((float(self.price[-1]) - float(self.price[-1440])) / float(self.price[-1]),3)
-        DailyMin,DailyMax = min(self.price[-1440:]),max(self.price[-1440:])
+        DailyMin,DailyMax = round(min(self.price[-1440:]),2),round(max(self.price[-1440:]),2)
         if dailyChangeDifference < 0: DailyDirection = '-'
         elif dailyChangeDifference > 0: DailyDirection = '+'    
         else:   DailyDirection = '+'
         
-        TwelveHPriceData = self.price[-720:]
-        TwelveHChangeDifference = round((float(self.price[-1]) - float(self.price[-720])),3)
+        TwelveHPriceData =  self.price[-720:]
+        TwelveHChangeDifference = round((float(self.price[-1]) - float(self.price[-720])),2)
         TwelveHChangePercent = 100*round((float(self.price[-1]) - float(self.price[-720])) / float(self.price[-1]),3)
-        TwelveHMin,TwelveHMax = min(self.price[-720:]),max(self.price[-720:])
+        TwelveHMin,TwelveHMax = round(min(self.price[-720:]),2),round(max(self.price[-720:]),2)
         if TwelveHChangeDifference < 0: TwelveHDirection = '-'
         elif TwelveHChangeDifference > 0: TwelveHDirection = '+'
         else: TwelveHDirection = '+'
         
         OneHPriceData = self.price[-60:]
-        OneHChangeDifference = round((float(self.price[-1]) - float(self.price[-60])),3)
+        OneHChangeDifference = round((float(self.price[-1]) - float(self.price[-60])),2)
         OneHChangePercent = 100*round((float(self.price[-1]) - float(self.price[-60])) / float(self.price[-1]),3)
-        OneHMin,OneHMax = min(self.price[-60:]),max(self.price[-60:])
+        OneHMin,OneHMax = round(min(self.price[-60:]),2),round(max(self.price[-60:]),2)
         if OneHChangeDifference <= 0: OneHDirection = '-'
         elif OneHChangeDifference >= 0: OneHDirection = '+'        
         else:   OneHDirection = '+'
@@ -383,24 +382,35 @@ class GrandObserver:
         hoursBetween = round(timeBetween.seconds / 60.0**2,1)
       
         summary = ''
-        summary += '***************************************\n***************************************\n'        
+        #summary += '***************************************\n***************************************\n'        
+        # Part 1: Current time, overall status.
         summary +=  'Current Time: %s\n' % currentTime.strftime('%H:%M %m/%d/%Y')
         summary += 'Last trade at %s -- %s days, %s hours ago.\n' %  (lastTradeTime.strftime('%H:%M %m/%d/%Y'),daysBetween,hoursBetween)
-        summary += 'Order summary\n=============\n'
-        for i in range(len(self.orders)-10,len(self.orders)):
-            if self.actions[i] == -1: orderType = 'Buy'
-            if self.actions[i] == 1: orderType = 'Sell'        
-            summary += '  Order %s:[%s] %s at %s\n' % (i+1,orderType,self.orders[i],datetime.fromtimestamp(self.max_time[self.order_time_index[i]]).strftime('%H:%M %m/%d/%Y'))
-        summary += '=============\n'
-        summary += 'Theoretical BTC: %s\nTheoretical USD: %s\n' % (round(self.btc,4),round(self.usd,3))
-        summary += 'Actual BTC: %s\nActual USD: %s\n' % (self.actual_btc,self.actual_usd)
-        summary += 'Current Profit: %s\n%s orders executed\n' % (self.profit(), len(self.orders))
-        summary += 'Current price: $%s\nDifference: %s$%s (%s%s %%)\n' % (self.price[-1],percentDirection,RawDiff,percentDirection,percentDiff)
-        summary += '1 hour change: %s$%s (%s%s %%) [$%s - $%s]\n' % (OneHDirection,abs(OneHChangeDifference),OneHDirection,abs(OneHChangePercent),OneHMin,OneHMax)
-        summary += '12 hour change: %s$%s (%s%s %%) [$%s - $%s]\n' % (TwelveHDirection,abs(TwelveHChangeDifference),TwelveHDirection,abs(TwelveHChangePercent),TwelveHMin,TwelveHMax)
-        summary += '24 hour change: %s$%s (%s%s %%) [$%s - $%s]\n' % (DailyDirection,abs(dailyChangeDifference),DailyDirection,abs(dailyChangePercent),DailyMin,DailyMax)
-        summary += '***************************************\n***************************************\n'        
+        summary += '%s orders executed\n\n' % len(self.orders)
+        
+        # Part 2: Basic trading & profit summary
+        summary += '\nPROFIT SUMMARY\n'+'='*14 +'\n'
+        summary += '  Current Profit:\t%s %%\n' % round((self.profit()-1)*100,2)
+        summary += '  Account Value:\t%s  BTC\n\t\t\t%s USD\n' % (round(self.actual_btc,3),round(self.actual_usd,2))
+        summary += '  Simulation Holdings:\t%s  BTC\n\t\t\t%s USD\n' % (round(self.btc,4),round(self.usd,2))
 
+        # Part 3: Market Sumamry
+        summary += '\nMARKET SUMMARY\n' + '='*14 + '\n'
+        summary += '  Price: $%s\n' % round(self.price[-1],2)
+        summary += '  Change since last trade:\t%s$%s (%s%s %%)\n' % (percentDirection,abs(RawDiff),percentDirection,abs(percentDiff))
+        summary += '  1 hr change:\t\t\t%s$%s (%s%s %%) [$%s - $%s]\n' % (OneHDirection,abs(OneHChangeDifference),OneHDirection,abs(OneHChangePercent),OneHMin,OneHMax)
+        summary += '  12 hr change:\t\t\t%s$%s (%s%s %%) [$%s - $%s]\n' % (TwelveHDirection,abs(TwelveHChangeDifference),TwelveHDirection,abs(TwelveHChangePercent),TwelveHMin,TwelveHMax)
+        summary += '  24 hr change:\t\t\t%s$%s (%s%s %%) [$%s - $%s]\n' % (DailyDirection,abs(dailyChangeDifference),DailyDirection,abs(dailyChangePercent),DailyMin,DailyMax)
+        
+        # Part 4:   Order History
+        summary += '\nRECENT ORDER HISTORY\n'+'='*21 + '\n'
+        for i in range(len(self.orders)):
+            if i > len(self.orders)-10:
+                if self.actions[i] == -1: orderType = 'Buy '
+                if self.actions[i] == 1: orderType = 'Sell'        
+                summary += '  Order %s:  [%s]   $%s\t@ %s\n' % (i+1,orderType,round(self.orders[i],2),datetime.fromtimestamp(self.max_time[self.order_time_index[i]]).strftime('%H:%M %m/%d/%Y'))
+        #summary += '='*13+'\n'
+        #summary += '***************************************\n***************************************\n'        
         return summary
 
     def send_daily_update(self):
