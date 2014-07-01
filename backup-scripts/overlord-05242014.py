@@ -5,17 +5,12 @@ need something more helpful here
 '''
 from observer import *
 from common import *
-import btceapi
+
 import pickle
 import time
 from datetime import datetime
 import os.path
 import sys, getopt, shutil
-from collections import deque
-import csv
-from trades import trades
-
-from get_btce_price import *
 
 # dirrectorys
 overlord_dir = 'results/overlord-files/'
@@ -115,9 +110,7 @@ class overlord:
         '''
         after loading backup, check for new data in big file.
         '''
-        try:    
-            # Update data every time.
-            collect_data()
+        try:
             i = 0
             timer = time.time()
             self.price_data = loadData(self.data_source)
@@ -129,29 +122,13 @@ class overlord:
                     
             duration = round((time.time() - timer ) ,1)
             self.numSynched = i
-            key = self.workers.keys()[0]
-            #print summary
             print 'It took %s seconds to synchronize with current data' % round(duration,1)
-            #print '%s prices updated.' % self.numSynched
+            print '%s prices updated.' % self.numSynched
             print 'Synchronized all values between %s and %s' % (datetime.fromtimestamp(orig_time ).strftime('%m-%d %H:%M'),datetime.fromtimestamp(new_time).strftime('%m-%d %H:%M'))
-            
-            parameterSummary =  '| SMOOTH:%s | MA:%s | MD:%s | PERCENT:%s | RISE:%s | LOSS:%s |'  % (self.workers[key].smooth,self.workers[key].ma,self.workers[key].md,self.workers[key].percent,self.workers[key].riseTolerance,self.workers[key].lossTolerance)
-            parameterSummaryLine = '-'*len(parameterSummary)
-            print '%s\n%s\n%s' % (parameterSummaryLine,parameterSummary,parameterSummaryLine)
             print 'Currently using %s values' % len(self.price_data[0])
-            print 'Current BTC: %s' % round(self.workers[key].btc,3)
-            print 'Current USD: %s' % round(self.workers[key].usd,2)
-            percentDiff = (float(self.price_data[0][-1]) - float(self.workers[key].orders[-1][0])) / float(self.workers[key].orders[-1][0])
-            print 'Current Profit: %s'  %   round(self.workers[key].current_worth[-1],3)
-            print '%s orders executed' % len(self.workers[key].actions)
-            print 'Last trade at %s at %s' % (round(self.workers[key].orders[-1][0],2), datetime.fromtimestamp(self.workers[key].orders[-1][1]).strftime('%Y-%m-%d %H:%M:%S'))
-            for i in range(len(self.workers[key].orders)-10,len(self.workers[key].orders)):
-                if self.workers[key].orders[i][2] == -1: orderType = 'Buy'
-                if self.workers[key].orders[i][2] == 1: orderType = 'Sell'
-                print '  Order %s: [%s] %s at %s' % (i+1,orderType,self.workers[key].orders[i][0],datetime.fromtimestamp(self.workers[key].orders[i][1]).strftime('%H:%M %m/%d/%Y'))
-            print 'Current price: %s' % round(float(self.price_data[0][-1]),2)
-            print 'Percent Difference: %s' % round(percentDiff,4)
-
+            print 'Current BTC: %s' % self.workers[self.workers.keys()[0]].btc
+            print 'Current USD: %s' % self.workers[self.workers.keys()[0]].usd
+                
             return True
         except:
             print 'Synchronization failed.'
@@ -166,7 +143,7 @@ class overlord:
             quick_filename = 'short_status_'+self.id+'.txt'
             with open(overlord_dir+quick_filename,'w') as quick_file:
                 for key in self.workers.keys():
-                    line = str(self.workers[key].time[-1])+','+','.join([str(i) for i in key])+','+str(self.workers[key].current_worth[-1])+','+str(len(self.workers[key].actions))+'\n'
+                    line = str(self.workers[key].time[-1])+','+','.join([str(i) for i in key])+','+str(self.workers[key].current_worth[-1])+'\n'
                     quick_file.write(line)
             
             # to prevent simultaneous read-write problems, create in different directory, copy over

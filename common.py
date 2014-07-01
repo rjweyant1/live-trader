@@ -8,6 +8,7 @@ the algorithm, but don't belong in any of the classes.
 from scipy import stats
 import numpy as np
 import smtplib  # for email
+from email.mime.text import MIMEText
 
 def loadData(data = 'data/btce_basic_btc_usd_depth.pkl'):
     '''
@@ -88,13 +89,13 @@ def getID(smooths,mas,mds,percents,riseTols,lossTols):
     tmp_id = len_mas+min_mas+max_mas+min_mds+max_mds+len_mds+min_smooths+max_smooths+len_smooths +min_precents+max_percents+len_percents +min_rise+ max_rise+len_rise +min_loss+max_loss+len_loss 
     id = str(numWorkers) + tmp_id.replace('.','')
     return id
-
+    
 def get_email_credentials(email_credentials = 'email_credentials.txt'):
     with open(email_credentials ,'r') as credentials_file:
         for line in credentials_file:
             (field,value) = line.split('=')
             if field == 'fromaddr': fromaddr=value.strip()
-            if field == 'toaddrs': toaddrs=value.strip()
+            if field == 'toaddrs': toaddrs=value.strip().split(',')
             if field == 'username': username=value.strip()
             if field == 'password': password=value.strip()
         try:        fromaddr
@@ -119,20 +120,20 @@ def get_email_credentials(email_credentials = 'email_credentials.txt'):
     return (fromaddr,toaddrs,username,password)
 
 def send_test_email(fromaddr,toaddrs,username,password):
-    server = smtplib.SMTP('smtp.gmail.com:587')
-    server.ehlo()
-    server.starttls()
+  
+    msg = MIMEText("""Trader is live and email connection established.""")
+    sender =fromaddr
+    recipients = toaddrs
+    msg['Subject'] = "LIVE AND RUNNING"
+    msg['From'] = sender
+    msg['To'] = ", ".join(recipients)
     
-    msg = "\r\n".join([
-      "From: " + fromaddr,
-      "To: " + toaddrs,
-      "Subject: LIVE AND RUNNING",
-      "",
-      "Trader is live and email connection established."
-      ])
-      
-    server.login(username,password)
-    server.sendmail(fromaddr, toaddrs, msg)
-    server.quit()
+    s = smtplib.SMTP('smtp.gmail.com:587')
+    s.ehlo()
+    s.starttls()
+    s.login(username,password)
+    s.sendmail(sender, recipients, msg.as_string())
+    s.quit()
+
 
 
