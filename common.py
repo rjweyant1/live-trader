@@ -135,5 +135,21 @@ def send_test_email(fromaddr,toaddrs,username,password):
     s.sendmail(sender, recipients, msg.as_string())
     s.quit()
 
+def send_email(fromaddr,toaddrs,subject,body,username,password):
+  
+    msg = MIMEText(body)
+    sender =fromaddr
+    recipients = toaddrs
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = ", ".join(recipients)
+    
+    s = smtplib.SMTP('smtp.gmail.com:587')
+    s.ehlo()
+    s.starttls()
+    s.login(username,password)
+    s.sendmail(sender, recipients, msg.as_string())
+    s.quit()
+
 
 

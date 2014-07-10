@@ -166,7 +166,7 @@ class overlord:
             quick_filename = 'short_status_'+self.id+'.txt'
             with open(overlord_dir+quick_filename,'w') as quick_file:
                 for key in self.workers.keys():
-                    line = str(self.workers[key].time[-1])+','+','.join([str(i) for i in key])+','+str(self.workers[key].current_worth[-1])+','+str(len(self.workers[key].actions))+'\n'
+                    line = str(self.workers[key].time[-1])+','+','.join([str(i) for i in key])+','+str(self.workers[key].current_worth[-1])+','+str(len(self.workers[key].orders))+'\n'
                     quick_file.write(line)
             
             # to prevent simultaneous read-write problems, create in different directory, copy over
@@ -177,6 +177,14 @@ class overlord:
                         line = str(self.workers[key].time[j])+','+','.join([str(i) for i in key])+','+str(self.workers[key].daily_percent_increase[j])+','+str(self.workers[key].actions[j])+'\n'
                         dp_file.write(line)
             shutil.copyfile(overlord_dir + dp_filename, grandobs_dir+dp_filename)
+            
+            order_sum_file='order_summary_'+self.id+'.txt'
+            with open(overlord_dir+order_sum_file,'w') as order_file:
+                order_file.write('number,type,price,time\n')
+                for i in range(len(self.workers[key].orders)):
+                    # order number, order type, price, time
+                    order_file.write('%s,%s,%s,%s\n' % (i+1,self.workers[key].orders[i][2],self.workers[key].orders[i][0],int(self.workers[key].orders[i][1])))
+            
             os.remove(overlord_dir + dp_filename)
             print 'Quick backup successful.'
             return True

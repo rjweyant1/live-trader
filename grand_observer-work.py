@@ -16,20 +16,48 @@ import smtplib  # for email
 from datetime import datetime
 from itertools import groupby
 import btceapi
+from optparse import OptionParser
 
 # LOAD EMAIL INFO FROM FILE
 email_credentials = 'email_credentials.txt' 
-(fromaddr,toaddrs,username,password)=get_email_credentials(email_credentials)
-
-# SEND INITIAL EMAIL TO CHECK EVERYTHING RUNNING
-send_test_email(fromaddr,toaddrs,username,password)
 
 results_dir = 'results/grandobserver-files/'
 key_file = 'btce-api-key.txt'
 
+
+def loadParameters():
+    '''
+        options.param_file
+        options.live_trader
+        options.api_key
+        options.email_credentials
+    '''
+    usage = 'Usage: %prog [options] arg'
+    parser = OptionParser(usage)
+    # Parameter File
+    parser.add_option('-p','--param-file',dest='param_file',
+                      help='which paramter file to load',default=None)
+    # Whether to actually Trade                     
+    parser.add_option('--live',dest='live_trader',action='store_true',
+                      help='Whether to actually execute trades',default=False)
+    # BTC-e API key                      
+    parser.add_option('-a','--api',dest='api_key',
+                      help='login credentials for BTC-e',default='btce-api-key.txt') 
+    # Email credentials                      
+    parser.add_option('-e','--email',dest='email_credentials',
+                      help='e-mail credentials file',default='email_credentials.txt')
+                      
+    (options,args) = parser.parse_args()
+    if len(args) < 1 and options.param_file == None:
+        parser.error('required: --param-file')
+        sys.exit()
+        
+    return options
+
+
 class GrandObserver:
     # constructor
-    def __init__(self,source=None):
+    def __init__(self,source=None,param_file=None, api_key = 'btce-api-key.txt', live=False):
         '''
         '''
         # what do here?
@@ -47,10 +75,12 @@ class GrandObserver:
         self.btc = 0.0
         self.usd = 1.0
         self.update_funds()
+        self.api_key = api_key
+        self.live = live
         
     def update_funds(self):
         try:        
-            handler = btceapi.KeyHandler(key_file, resaveOnDeletion=True)
+            handler = btceapi.KeyHandler(self.api_key, resaveOnDeletion=True)
             key = handler.getKeys()[0]
     
             conn = btceapi.BTCEConnection()
@@ -139,6 +169,7 @@ class GrandObserver:
             self.daily_maxes.append(current_max_value)
             # add max value
             self.absolute_max.append((current_max_value,current_max_method_index))
+
             
     def update(self):
         '''
@@ -247,25 +278,16 @@ class GrandObserver:
         print 'Order time is %s.' % currentTime
 
         if realBuy:
-            server = smtplib.SMTP('smtp.gmail.com:587')
-            server.ehlo()
-            server.starttls()
-            
-            msg = "\r\n".join([
-              "From: krangfromdimensionx@gmail.com",
-              "To: robert.weyant@gmail.com",
-              "Subject: *BUY* BTC @ " + str(currentPrice) + '. Action time is: ' + str(currentTime),
-              "",
-              "BUY BTC @ " + str(currentPrice) + '. Action time is: ' + str(currentTime)
-              ])
-              
-            server.login(username,password)
-            server.sendmail(fromaddr, toaddrs, msg)
-            server.quit()
-            
+            try:
+                subject = "*BUY* BTC @ %s. Action time is: %s" % (str(currentPrice),str(currentTime))
+                body = subject
+                send_email(fromaddr,toaddrs,subject, body, username,password)
+            except:
+                print 'Problem BUY sending email.'
+                
             self.update_funds()
             
-            handler = btceapi.KeyHandler(key_file, resaveOnDeletion=True)
+            handler = btceapi.KeyHandler(self.api_key, resaveOnDeletion=True)
             for key in handler.getKeys():
                 print "Printing info for key %s" % key
                 t = btceapi.TradeAPI(key, handler)
@@ -306,25 +328,16 @@ class GrandObserver:
 
         
         if realSell:
-            server = smtplib.SMTP('smtp.gmail.com:587')
-            server.ehlo()
-            server.starttls()
-            
-            msg = "\r\n".join([
-              "From: krangfromdimensionx@gmail.com",
-              "To: robert.weyant@gmail.com",
-              "Subject: *SELL* BTC @ " + str(currentPrice) + '. Action time is: ' + str(currentTime),
-              "",
-              "SELL BTC @ " + str(currentPrice) + '. Action time is: ' + str(currentTime)
-              ])
-              
-            server.login(username,password)
-            server.sendmail(fromaddr, toaddrs, msg)
-            server.quit()
-            
+            try:
+                subject = "*SELL* BTC @ %s. Action time is: %s" % (str(currentPrice),str(currentTime))
+                body = subject
+                send_email(fromaddr,toaddrs,subject, body, username,password)
+            except:
+                print 'Problem SELL sending email.'
+           
             self.update_funds()
             
-            handler = btceapi.KeyHandler(key_file, resaveOnDeletion=True)
+            handler = btceapi.KeyHandler(self.api_key, resaveOnDeletion=True)
             for key in handler.getKeys():
                 print "Printing info for key %s" % key
                 t = btceapi.TradeAPI(key, handler)
@@ -403,12 +416,23 @@ class GrandObserver:
         summary += '  24 hr change:\t\t\t%s$%s (%s%s %%) [$%s - $%s]\n' % (DailyDirection,abs(dailyChangeDifference),DailyDirection,abs(dailyChangePercent),DailyMin,DailyMax)
         
         # Part 4:   Order History
+        lastBuy = -1
+        lastSell = -1
+        percentChangeBetweenSells = 0
+        percentChangeBetweenBuys = 0        
         summary += '\nRECENT ORDER HISTORY\n'+'='*21 + '\n'
         for i in range(len(self.orders)):
-            if i > len(self.orders)-10:
-                if self.actions[i] == -1: orderType = 'Buy '
-                if self.actions[i] == 1: orderType = 'Sell'        
-                summary += '  Order %s:  [%s]   $%s\t@ %s\n' % (i+1,orderType,round(self.orders[i],2),datetime.fromtimestamp(self.max_time[self.order_time_index[i]]).strftime('%H:%M %m/%d/%Y'))
+            if self.actions[i] == -1: 
+                orderType = 'Buy '
+                if lastBuy > 0: percentChangeBetweenBuys = round(100*(self.orders[i] - lastBuy) / lastBuy,2)
+                lastBuy = self.orders[i]
+                    
+            if self.actions[i] == 1: 
+                orderType = 'Sell'        
+                if lastSell > 0: percentChangeBetweenSells = round(100*(self.orders[i] - lastSell) / lastSell,2)
+                lastSell = self.orders[i]                    
+            if i > len(self.orders)-10:                    
+                summary += '  Order %s:  [%s]  $%s (%s%% || %s%%)\t@ %s\n' % (i+1,orderType,round(self.orders[i],2),percentChangeBetweenSells,percentChangeBetweenBuys,datetime.fromtimestamp(self.max_time[self.order_time_index[i]]).strftime('%H:%M %m/%d'))
         #summary += '='*13+'\n'
         #summary += '***************************************\n***************************************\n'        
         return summary
@@ -420,24 +444,13 @@ class GrandObserver:
         '''
         currentPrice = self.price[self.order_time_index[-1]]
         
-        server = smtplib.SMTP('smtp.gmail.com:587')
-        server.ehlo()
-        server.starttls()
-        
-        msg = "\r\n".join([
-          "From: krangfromdimensionx@gmail.com",
-          "To: robert.weyant@gmail.com",
-          "Subject: *DAILY UPDATE* BTC @ " + str(self.price[-1]) + '. Current time is: ' + str(datetime.now()),
-          "",
-          self.summary_string()
-          ])
-        
-          
-          
-        server.login(username,password)
-        server.sendmail(fromaddr, toaddrs, msg)
-        server.quit()
-        
+        try:
+            subject = "*DAILY UPDATE* BTC @ %s. Current time is: %s" % (str(self.price[-1]) ,str(datetime.now()))
+            body = self.summary_string()
+            send_email(fromaddr,toaddrs,subject, body, username,password)
+        except:
+            print 'Problem UPDATE sending email.'
+               
         self.update_funds()
             
         print 'Daily Update Sent.'
@@ -469,9 +482,26 @@ class GrandObserver:
 
         return round(new_profit,4)
 
+
 def main():
     foundToday = False
-    live_observer = GrandObserver()
+
+    # Load Command Line Arguments
+    #  options.param_file
+    #  options.live_trader
+    #  options.api_key
+    #  options.email_credentials
+    options = loadParameters()
+    
+    # Send Initial Status Email
+    (fromaddr,toaddrs,username,password)=get_email_credentials(options.email_credentials)
+    message_text = 'Email Connection Established.\n'
+    message_text += '-----------------------------\n'
+    message_text += '  Parameter File:\t%s\n  Live Trading:\t%s\n  API Key File:\t%s\n  E-mail Credentials file:\t%s' % (options.param_file,options.live_trader,options.api_key,options.email_credentials)
+    send_email(fromaddr,toaddrs,'Live and Running', message_text, username,password)
+
+    # Initialize Observer    
+    live_observer = GrandObserver( param_file = options.param_file,live=options.live_trader,api_key=options.api_key )
     live_observer.loadData()
     while True:
         live_observer.update()
