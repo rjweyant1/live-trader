@@ -57,7 +57,7 @@ def loadParameters():
 
 class GrandObserver:
     # constructor
-    def __init__(self,source=None,param_file=None, api_key = 'btce-api-key.txt', live=False):
+    def __init__(self,source=None,param_file=None, api_key = 'btce-api-key.txt', live=False,email_credentials='email_credentials.txt'):
         '''
         '''
         # what do here?
@@ -77,6 +77,7 @@ class GrandObserver:
         self.update_funds()
         self.api_key = api_key
         self.live = live
+        self.email_credentials = email_credentials
         
     def update_funds(self):
         try:        
@@ -95,6 +96,9 @@ class GrandObserver:
 
     def loadData(self):
         ''' 
+        initially load in the data.
+         start with historical price data.
+         
         '''
         # read in price data
         price_data = loadData('data/btc_usd_btce.txt')
@@ -104,7 +108,7 @@ class GrandObserver:
         # initial load
         x = dict()
         
-        # open up every daily_percent* file and add it in.
+        # open up EVERY daily_percent* file and add it in.
         # store it in temporary dictionary x, eventually into x_array
         results_listing = [result for result in os.listdir(results_dir)  if 'daily_percent' in result]
         print 'Loading %s daily percents.' % len(results_listing)
@@ -279,6 +283,7 @@ class GrandObserver:
 
         if realBuy:
             try:
+                (fromaddr,toaddrs,username,password)=get_email_credentials(self.email_credentials)
                 subject = "*BUY* BTC @ %s. Action time is: %s" % (str(currentPrice),str(currentTime))
                 body = subject
                 send_email(fromaddr,toaddrs,subject, body, username,password)
@@ -329,6 +334,7 @@ class GrandObserver:
         
         if realSell:
             try:
+                (fromaddr,toaddrs,username,password)=get_email_credentials(self.email_credentials)
                 subject = "*SELL* BTC @ %s. Action time is: %s" % (str(currentPrice),str(currentTime))
                 body = subject
                 send_email(fromaddr,toaddrs,subject, body, username,password)
@@ -424,12 +430,12 @@ class GrandObserver:
         for i in range(len(self.orders)):
             if self.actions[i] == -1: 
                 orderType = 'Buy '
-                if lastBuy > 0: percentChangeBetweenBuys = round(100*(self.orders[i] - lastBuy) / lastBuy,2)
+                if lastBuy > 0 and lastSell > 0: percentChangeBetweenBuys = round(100*(self.orders[i] - lastSell) / lastSell,2)
                 lastBuy = self.orders[i]
                     
             if self.actions[i] == 1: 
                 orderType = 'Sell'        
-                if lastSell > 0: percentChangeBetweenSells = round(100*(self.orders[i] - lastSell) / lastSell,2)
+                if  lastBuy > 0 and lastSell > 0: percentChangeBetweenSells = round(100*(self.orders[i] - lastBuy) / lastBuy,2)
                 lastSell = self.orders[i]                    
             if i > len(self.orders)-10:                    
                 summary += '  Order %s:  [%s]  $%s (%s%% || %s%%)\t@ %s\n' % (i+1,orderType,round(self.orders[i],2),percentChangeBetweenSells,percentChangeBetweenBuys,datetime.fromtimestamp(self.max_time[self.order_time_index[i]]).strftime('%H:%M %m/%d'))
@@ -447,6 +453,7 @@ class GrandObserver:
         try:
             subject = "*DAILY UPDATE* BTC @ %s. Current time is: %s" % (str(self.price[-1]) ,str(datetime.now()))
             body = self.summary_string()
+            (fromaddr,toaddrs,username,password)=get_email_credentials(self.email_credentials)
             send_email(fromaddr,toaddrs,subject, body, username,password)
         except:
             print 'Problem UPDATE sending email.'
@@ -493,16 +500,19 @@ def main():
     #  options.email_credentials
     options = loadParameters()
     
-    # Send Initial Status Email
-    (fromaddr,toaddrs,username,password)=get_email_credentials(options.email_credentials)
-    message_text = 'Email Connection Established.\n'
-    message_text += '-----------------------------\n'
-    message_text += '  Parameter File:\t%s\n  Live Trading:\t%s\n  API Key File:\t%s\n  E-mail Credentials file:\t%s' % (options.param_file,options.live_trader,options.api_key,options.email_credentials)
-    send_email(fromaddr,toaddrs,'Live and Running', message_text, username,password)
-
     # Initialize Observer    
-    live_observer = GrandObserver( param_file = options.param_file,live=options.live_trader,api_key=options.api_key )
+    live_observer = GrandObserver( param_file = options.param_file,live=options.live_trader,api_key=options.api_key, email_credentials=options.email_credentials )
     live_observer.loadData()
+    live_observer.update_funds()
+    # Send Initial Status Email
+    (fromaddr,toaddrs,username,password)=get_email_credentials(live_observer.email_credentials)
+    message_text = 'Email Connection Established.\n'
+    message_text += '-'*45+'\n'
+    message_text += '  Parameter File:\t%s\n  Live Trading:\t%s\n  API Key File:\t%s\n  E-mail Credentials file:\t%s' % (options.param_file,options.live_trader,options.api_key,options.email_credentials)
+    message_text += '\n\n'+'-'*34+'\nStandard Bot Summary\n'+'-'*34+'\n'
+    message_text += live_observer.summary_string()
+    send_email(fromaddr,toaddrs,'Live and Running', message_text, username,password)
+    
     while True:
         live_observer.update()
         current_time = datetime.now()
