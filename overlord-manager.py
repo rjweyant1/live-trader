@@ -4,34 +4,53 @@ from common import *
 
 import os.path
 import sys, getopt
+from optparse import OptionParser
+
+def loadParameters():
+    '''
+        options.param_file
+        options.param_dir
+    '''
+    usage = 'Usage: %prog [options] arg'
+    parser = OptionParser(usage)
+    # Parameter File
+    parser.add_option('-p','--param-file',dest='param_file',
+                      help='which paramter file to load',default=None)
+    # Parameter Directory
+    parser.add_option('-d','--param-dir',dest='param_dir',
+                      help='which paramter file to load',default='parameters-lists')
+                      
+    (options,args) = parser.parse_args()
+
+    return options
 
 def main(argv):        
-    param_dir = ''
-    # Accept command line argument -i
-    try:
-        opts, args = getopt.getopt(argv,'hi:o',['ifile='])
-    except getopt.GetoptError:
-        print 'Usage: overlord.py -i <parameter-directory>'
-        sys.exit(2)
-    for opt,arg in opts:
-        if opt == '-h':
-            print 'Usage: overlord.py -i <parameter-directory>'
-            sys.exit()
-        elif opt in ('-i','--ifile'):
-            param_dir=arg.strip().replace(' ','')
-        
-    #print 'Input file is ', param_dir
-    if param_dir != '' and os.path.exists(param_dir):
+    #   Load command-line parameters
+    options = loadParameters()
+    (param_file,param_dir) = (options.param_file,options.param_dir)
+    
+    # enough files specified exist, then continue
+    if param_dir != '' and os.path.exists(param_dir) and (param_file == None or os.path.exists(param_file) or os.path.exists(param_dir+'/'+param_file)):
+        # list all .pkl files in param_dir
         param_files = [i for i in os.listdir(param_dir) if 'pkl' in i and 'param' in i]
         overlords = []
         
         print '\n\n==============================================='
-        print '   Starting data load. Managing %s overlords.' % len(param_files)
+        if param_file == None: print '   Starting data load. Managing %s overlords.' % len(param_files)
+        elif param_file != None: print '   Starting data load. Managing %s overlords.' % 1
         print '===============================================\n'
         # Load all overlords
         for param_f in param_files:
-            overlords.append(loadOverlord(parmFile=param_dir+'/'+param_f,fullBackup=True))
-            
+            # if one single file is NOT specified
+            if param_file == None:
+                overlords.append(loadOverlord(parmFile=param_dir+'/'+param_f,fullBackup=True))
+            # if file specified contains directory 
+            elif param_file != None and param_file == param_dir+'/'+param_f:
+                overlords.append(loadOverlord(parmFile=param_dir+'/'+param_f,fullBackup=True))
+            # if file specified is just the file name, iwthout the directory
+            elif param_file != None and param_f == param_file:
+                overlords.append(loadOverlord(parmFile=param_dir+'/'+param_f,fullBackup=True))
+                
         print '\n==========================='
         print 'Starting continuous update.'
         print '===========================\n'

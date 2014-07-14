@@ -78,6 +78,19 @@ class GrandObserver:
         self.api_key = api_key
         self.live = live
         self.email_credentials = email_credentials
+        self.param_file = param_file
+        
+        
+    def update_result_listing(self, file_type='daily_percent'):
+        if self.param_file != None and os.path.exists(self.param_file ):
+            self.id = self.param_file .split('_')[1].split('.')[0]
+            self.results_listing = [result for result in os.listdir(results_dir)  if (file_type in result and self.id in result)]
+        elif param_file != None and not os.path.exists(param_file):
+            print 'param_file does not exist.  Loading all files in results directory.'
+            self.results_listing = [result for result in os.listdir(results_dir)  if file_type in result]
+        else:
+            print 'Loading all files in results directory.'
+            self.results_listing = [result for result in os.listdir(results_dir)  if file_type in result]
         
     def update_funds(self):
         try:        
@@ -108,11 +121,14 @@ class GrandObserver:
         # initial load
         x = dict()
         
-        # open up EVERY daily_percent* file and add it in.
-        # store it in temporary dictionary x, eventually into x_array
-        results_listing = [result for result in os.listdir(results_dir)  if 'daily_percent' in result]
-        print 'Loading %s daily percents.' % len(results_listing)
-        for result in results_listing:
+        # Open only matching daily_percent* files if --param-file specified
+        # open up EVERY daily_percent* file and add it in if --param-file not specified
+        self.update_result_listing()
+        #results_listing = [result for result in os.listdir(results_dir)  if 'daily_percent' in result]
+        
+        # store it in temporary dictionary x, eventually into x_array        
+        print 'Loading %s daily percents.' % len(self.results_listing)
+        for result in self.results_listing:
             with open(results_dir+result,'rb') as f:
                 while True:
                     try:
@@ -181,13 +197,18 @@ class GrandObserver:
         price_data = loadData('data/btc_usd_btce.txt')
         self.max_time = price_data[1,:].tolist()
         self.price = price_data[0,:].tolist()
+        
+        # Open only matching daily_percent* files if --param-file specified
+        # open up EVERY daily_percent* file and add it in if --param-file not specified
+        self.update_result_listing(file_type='short_dp')        
+        
         # find all short_daily_percent files
-        results_listing = [result for result in os.listdir(results_dir)  if 'short_dp' in result]
-        print 'Loading %s files.' % len(results_listing)
+        #results_listing = [result for result in os.listdir(results_dir)  if 'short_dp' in result]
+        print 'Loading %s files.' % len(self.results_listing)
         
         # load all short_daily_percent info
         initial_load = []
-        for result in results_listing:
+        for result in self.results_listing:
             # multiple line files
             # id, time, parameters,daily profit, action
             with open(results_dir+result,'r') as f:
@@ -199,7 +220,7 @@ class GrandObserver:
         #print 'Current Parameter set: MA:%s, MD:%s, SMOOTH:%s, PERCENT:%s, RISE:%s, LOSS:%s' % (initial_load[-1][1]) 
        
         # remove short_daily_percent files
-        for result in results_listing:
+        for result in self.results_listing:
             os.remove(results_dir+result)
         
         # sort new entries by time

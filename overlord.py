@@ -24,12 +24,12 @@ grandobs_dir = 'results/grandobserver-files/'
 class overlord:
     # constructor
     def __init__(self,smooths=[],mas=[],mds=[],percents=[],riseTols=[],lossTols=[],historical_data='data/btc_usd_btce.txt'):
-        self.mas = mas
-        self.mds = mds
-        self.smooths = smooths
-        self.percents = percents
-        self.riseTols = riseTols
-        self.lossTols = lossTols
+        self.mas = mas              # width of the moving average window
+        self.mds = mds              # width of the moving derivative window
+        self.smooths = smooths      # width of the smoothing window
+        self.percents = percents    # percent difference in price before action
+        self.riseTols = riseTols    # tolerance of price rise before unconditional buy
+        self.lossTols = lossTols    # tolerance of price drop before unconditional sell
         
         self.workers = dict()       # blank
         self.curTime = 0
@@ -41,6 +41,7 @@ class overlord:
         n_riseTols = len(riseTols)
         n_lossTols = len(lossTols)
         
+        #   calc number of workers it should be managing -- grid
         self.numWorkers = n_mas*n_mds*n_smooths*n_percents*n_riseTols*n_lossTols
         self.data_source = historical_data
         self.price_data= loadData(data=historical_data) 
@@ -52,6 +53,10 @@ class overlord:
         self.numSynched = 0
 
     def getID(self):
+        '''
+        determine (hopefully) unique id tag based on parameters.
+        this tag is used for identifying output files
+        '''
         min_mas,max_mas,len_mas = (str(min(self.mas)),str(max(self.mas)),str(len(self.mas)))
         min_mds,max_mds,len_mds = (str(min(self.mds)),str(max(self.mds)),str(len(self.mds)))
         min_smooths,max_smooths,len_smooths = (str(min(self.smooths)),str(max(self.smooths)),str(len(self.smooths)))
@@ -97,7 +102,8 @@ class overlord:
 
     def loadWorkers(self):  
         '''
-        Loads Workers from backups
+        Loads Workers from backups.
+        Not being used.
         '''
         pass
 
@@ -116,11 +122,20 @@ class overlord:
         after loading backup, check for new data in big file.
         '''
         try:    
-            # Update data every time.
+            # Update data file EVERY cycle.
             collect_data()
             i = 0
+            
+            # Time this process
             timer = time.time()
+            
+            # This literally loads the whole price data-set every time.
+            # not the most efficient way
+            # need to get around to making this step more efficient
             self.price_data = loadData(self.data_source)
+            
+            # Update each worker for each price,time that is in the dataset
+            # but not been loaded into the overlord yet.
             orig_time = self.curTime
             for (price,new_time) in self.price_data.transpose():
                 if new_time > self.curTime:
@@ -128,8 +143,10 @@ class overlord:
                     i = i+1
                     
             duration = round((time.time() - timer ) ,1)
+            
             self.numSynched = i
             key = self.workers.keys()[0]
+            
             #print summary
             print 'It took %s seconds to synchronize with current data' % round(duration,1)
             #print '%s prices updated.' % self.numSynched
@@ -145,10 +162,21 @@ class overlord:
             print 'Current Profit: %s'  %   round(self.workers[key].current_worth[-1],3)
             print '%s orders executed' % len(self.workers[key].actions)
             print 'Last trade at %s at %s' % (round(self.workers[key].orders[-1][0],2), datetime.fromtimestamp(self.workers[key].orders[-1][1]).strftime('%Y-%m-%d %H:%M:%S'))
-            for i in range(len(self.workers[key].orders)-10,len(self.workers[key].orders)):
-                if self.workers[key].orders[i][2] == -1: orderType = 'Buy'
-                if self.workers[key].orders[i][2] == 1: orderType = 'Sell'
-                print '  Order %s: [%s] %s at %s' % (i+1,orderType,self.workers[key].orders[i][0],datetime.fromtimestamp(self.workers[key].orders[i][1]).strftime('%H:%M %m/%d/%Y'))
+            lastBuy = -1
+            lastSell = -1
+            percentChangeBetweenSells = 0
+            percentChangeBetweenBuys = 0
+            for i in range(len(self.workers[key].orders)):
+                if self.workers[key].orders[i][2] == -1: 
+                    orderType = 'Buy'
+                    if lastBuy > 0:     percentChangeBetweenBuys = round(100*(self.workers[key].orders[i][0] - lastBuy) / lastBuy,2)
+                    lastBuy = self.workers[key].orders[i][0]
+                if self.workers[key].orders[i][2] == 1: 
+                    orderType = 'Sell'
+                    if lastSell > 0:     percentChangeBetweenSells = round(100*(self.workers[key].orders[i][0] - lastSell) / lastSell,2)
+                    lastSell = self.workers[key].orders[i][0]                    
+                if i > len(self.workers[key].orders)-10:
+                    print '  Order %s: [%s] %s (%s%%// %s%%) at %s' % (i+1,orderType,self.workers[key].orders[i][0],percentChangeBetweenSells,percentChangeBetweenBuys,datetime.fromtimestamp(self.workers[key].orders[i][1]).strftime('%H:%M %m/%d'))
             print 'Current price: %s' % round(float(self.price_data[0][-1]),2)
             print 'Percent Difference: %s' % round(percentDiff,4)
 
@@ -230,10 +258,10 @@ class overlord:
             
             # If the current time is new, then update
             if float(time) != self.curTime:
-                self.curTime = float(time)             # new time = current time
-                self.updateWorkers(float(price),float(time))  # update everyone
+                self.curTime = float(time)                      # new time = current time
+                self.updateWorkers(float(price),float(time))    # update everyone
                 
-                #   True if updated
+                #   True if updated successfully
                 return True                             
             
             #   False if not
@@ -242,7 +270,8 @@ class overlord:
 
     def continuous_run(self,wait_time = 60, cycle_length = 60, load=False):
         '''
-        continuously update this overlord's workers
+        continuously update this overlord's workers.
+        THIS METHOD IS OBSOLETE
         '''
         i = cycle_length
         while True:
@@ -262,7 +291,7 @@ class overlord:
 
 def loadOverlord(parmFile=None,fullBackup=False):
     '''
-    check for backup, if it doesn't exist, load from scratch
+    check for overlord backup (pkl), if it doesn't exist, load from scratch
     '''
     
     if parmFile != None:
