@@ -60,7 +60,7 @@ class GrandObserver:
     def __init__(self,source=None,param_file=None, api_key = 'btce-api-key.txt', live=False,email_credentials='email_credentials.txt'):
         '''
         '''
-        # what do here?
+        # initialize some blanks...
         self.worth=[]
         self.percents_list = []
         self.action_list = []
@@ -72,9 +72,12 @@ class GrandObserver:
         self.actions = []   
         self.daily_maxes=[]
         self.daily_max_method=[]
+        
         self.btc = 0.0
-        self.usd = 1.0
-        self.update_funds()
+        self.usd = 1.0              # start at $1
+        self.update_funds()         # initially check what's in the bank, and that connection works
+        
+        # command line arguments
         self.api_key = api_key
         self.live = live
         self.email_credentials = email_credentials
@@ -82,6 +85,9 @@ class GrandObserver:
         
         
     def update_result_listing(self, file_type='daily_percent'):
+        '''
+        updates the 'ls', specification allowed.
+        '''
         if self.param_file != None and os.path.exists(self.param_file ):
             self.id = self.param_file .split('_')[1].split('.')[0]
             self.results_listing = [result for result in os.listdir(results_dir)  if (file_type in result and self.id in result)]
@@ -93,6 +99,10 @@ class GrandObserver:
             self.results_listing = [result for result in os.listdir(results_dir)  if file_type in result]
         
     def update_funds(self):
+        '''
+        Checks what is in BTC-e account.
+        ANY problems, vlaues get set to -999
+        '''
         try:        
             handler = btceapi.KeyHandler(self.api_key, resaveOnDeletion=True)
             key = handler.getKeys()[0]
@@ -110,8 +120,9 @@ class GrandObserver:
     def loadData(self):
         ''' 
         initially load in the data.
-         start with historical price data.
-         
+        start with historical price data.
+        low computational cost here -- 
+        just cycle through but DON'T execute any of these historical trades
         '''
         # read in price data
         price_data = loadData('data/btc_usd_btce.txt')
@@ -142,10 +153,11 @@ class GrandObserver:
         # extract daily percent increase and action lists from temporary dictionary x
         for key in x.keys():
             self.keys.append(key)
-            #print len(x[key][0]),len(x[key][1])
-            self.percents_list.append(x[key][0].tolist())
-            self.action_list.append(x[key][1].tolist())
-            
+            print len(x[key][0]),len(x[key][1])
+            #self.percents_list.append(x[key][0].tolist())
+            #self.action_list.append(x[key][1].tolist())
+            self.percents_list.append(x[key][0])
+            self.action_list.append(x[key][1])            
         del x
         # make everything the same length
         #self.individual_time = [self.max_time[len(i)] for i in self.percents_list ]
@@ -175,6 +187,7 @@ class GrandObserver:
                 self.orders.append(self.price[i])
                 self.order_time_index.append(i)
                 self.actions.append(curAction)
+                # gets bot up to speed -- fake buys/sells
                 if curAction == 1:  self.sell(realSell=False,time_index = i)
                 if curAction == -1: self.buy(realBuy=False,time_index=i)
 

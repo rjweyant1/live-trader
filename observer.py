@@ -83,7 +83,6 @@ class observer:
         self.d1.append(get_slope(self.price_smooth[-self.md:],self.time[-self.md:]))
         self.d1_smooth.append(mean(self.d1[-self.ma:]))
 
-        
     def check_current_extreme(self):
         ''' 
         Identify if the CURRENT price shows evidence of a minimum or maximum.
